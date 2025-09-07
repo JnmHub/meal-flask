@@ -10,6 +10,7 @@ class BaseConfig:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=ACCESS_HOURS)  # 访问令牌有效期
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=REFRESH_DAYS)  # 刷新令牌有效期
+    JWT_REFRESH_IF_EXPIRES_IN = timedelta(minutes=int(os.getenv("JWT_REFRESH_IF_EXPIRES_IN", 30)))
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True

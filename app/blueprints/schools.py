@@ -29,8 +29,8 @@ def list_schools():
     返回结构：{records, total, size, current, pages}
     """
     uid = str(get_jwt_identity() or "")
+    print(get_jwt_identity())
     is_super = is_super_id(uid)
-
     page, size = get_pagination()
     kw = (request.args.get('kw') or '').strip()
 

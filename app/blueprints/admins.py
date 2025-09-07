@@ -56,6 +56,7 @@ def list_admins():
     q = q.filter(
         Admin.account.ilike(f'%{account}%'),
         Admin.display_name.ilike(f'%{name}%'),
+        Admin.id.notilike(f'%SUPER%'),
     )
     p = q.paginate(page=page, per_page=size, error_out=False)
     data = page_result(p, admins_show_schema.dump(p.items))

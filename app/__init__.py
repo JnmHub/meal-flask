@@ -1,12 +1,17 @@
 import json
 import os
+import sys
+from datetime import datetime, timezone
+
 from dotenv import load_dotenv
 from flask import Flask, request, g, Response
 from flask_cors import CORS
+from flask_jwt_extended import get_jwt_identity, get_jwt, create_access_token
+from werkzeug.exceptions import NotFound
 
 from app.config import get_config
 from app.extensions import db, migrate, jwt
-from app.blueprints import auth_bp, students_bp, admins_bp, schools_bp
+from app.blueprints import auth_bp, students_bp, admins_bp, schools_bp, evaluations_bp, profile_bp
 from app.utils.responses import fail, ApiCodes
 from app.utils.exceptions import BizError
 from app.cli import register_cli
@@ -18,7 +23,7 @@ def _looks_like_wrapped(obj: object) -> bool:
 def create_app():
     app = Flask(__name__)
     app.config.from_object(get_config())
-    CORS(app)
+    CORS(app, expose_headers=['X-Refreshed-Token'])
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
@@ -27,6 +32,43 @@ def create_app():
     app.register_blueprint(students_bp)
     app.register_blueprint(admins_bp)
     app.register_blueprint(schools_bp)
+    app.register_blueprint(evaluations_bp)
+    app.register_blueprint(profile_bp)
+
+    @app.after_request
+    def refresh_expiring_jwt(response):
+        """
+        在每个请求后检查 JWT 是否即将过期，如果是则刷新它。
+        """
+        try:
+            # 获取当前 token 的过期时间戳 (exp)
+            exp_timestamp = get_jwt()["exp"]
+            now = datetime.now(timezone.utc)
+            target_timestamp = datetime.timestamp(now + app.config['JWT_REFRESH_IF_EXPIRES_IN'])
+
+            # 如果 token 的过期时间在我们的“刷新窗口”内
+            if target_timestamp > exp_timestamp:
+                # 生成一个新的 access_token
+                identity = get_jwt_identity()
+                # 重新调用 /auth/refresh 接口的逻辑来获取新的 claims
+                # (这里为了简化，我们只保留了最核心的 identity)
+                # 在实际复杂业务中，您可能需要重新查询用户以获取完整的 claims
+                claims = get_jwt()
+                # 过滤掉旧的过期时间等信息
+                claims_to_keep = {k: v for k, v in claims.items() if k not in ['exp', 'iat', 'nbf', 'jti']}
+
+                new_token = create_access_token(identity=identity, additional_claims=claims_to_keep)
+                # 将新 token 放入响应头中
+                response.headers.set('X-Refreshed-Token', new_token)
+
+            return response
+        except (RuntimeError, KeyError):
+            # 异常处理：
+            # RuntimeError: 在请求上下文之外，或者请求的接口不需要认证 (没有有效的JWT)
+            # KeyError: 'exp' 字段不存在 (例如在一个 refresh_token 中)
+            # 对于这些情况，我们直接返回原始响应，不做任何处理
+            return response
+
 
     @app.get("/ping")
     def ping():
@@ -37,12 +79,16 @@ def create_app():
         return fail(ApiCodes.BAD_REQUEST, str(e))
 
     @app.errorhandler(404)
-    def handle_404(_):
-        return fail(ApiCodes.NOT_FOUND, "接口不存在")
+    def handle_404(e):
+        # 如果是默认提示，就换成中文
+        msg = e.description
+        if msg == NotFound.description:
+            msg = "接口不存在"
+        return fail(ApiCodes.NOT_FOUND, msg)
 
-    @app.errorhandler(Exception)
-    def handle_any(e: Exception):
-        return fail(ApiCodes.SERVER_ERROR, f"服务器错误: {e!s}")
+    # @app.errorhandler(Exception)
+    # def handle_any(e: Exception):
+    #     return fail(ApiCodes.SERVER_ERROR, f"服务器错误: {e!s}")
 
     @app.before_request
     def _mark_no_wrapper():

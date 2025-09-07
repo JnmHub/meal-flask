@@ -48,8 +48,6 @@ class AdminShowSchema(BaseSchema):
 
 
 class AdminUpdateSchema(BaseSchema):
-    class Meta:
-        unknown = EXCLUDE
     id = fields.Str()
     account  = fields.Str(
         required=True,

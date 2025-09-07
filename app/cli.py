@@ -17,10 +17,10 @@ def init_db():
 @click.option('--password', prompt=True, hide_input=True, confirmation_prompt=True)
 @with_appcontext
 def create_super(account, password):
-    if Admin.query.get('SUPER'):
+    admin_id = f"SUPER-{uuid4().hex[:8].upper()}"
+    if Admin.query.get(admin_id):
         click.echo('超级管理员已存在(id=SUPER)')
         return
-    admin_id = f"SUPER-{uuid4().hex[:8].upper()}"
     a = Admin(id=admin_id, account=account, password_hash=hash_password(password), display_name='超级管理员')
     db.session.add(a)
     db.session.commit()
